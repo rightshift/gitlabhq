@@ -127,6 +127,7 @@ module API
     end
 
     class Issue < ProjectEntity
+      expose :metadata
       expose :label_list, as: :labels
       expose :milestone, using: Entities::Milestone
       expose :assignee, :author, using: Entities::UserBasic
