@@ -160,9 +160,12 @@ We recommend using a PostgreSQL database. For MySQL check [MySQL setup guide](da
 ### Clone the Source
 
     # Clone GitLab repository
-    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 7-3-stable gitlab
+    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 7-2-stable gitlab
 
-**Note:** You can change `7-3-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
+    # Go to gitlab dir
+    cd /home/git/gitlab
+
+**Note:** You can change `7-2-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
 
 ### Configure It
 
@@ -257,9 +260,22 @@ We recommend using a PostgreSQL database. For MySQL check [MySQL setup guide](da
 GitLab Shell is an SSH access and repository management software developed specially for GitLab.
 
     # Run the installation task for gitlab-shell (replace `REDIS_URL` if needed):
+<<<<<<< HEAD
     sudo -u git -H bundle exec rake gitlab:shell:install[v2.0.0] REDIS_URL=unix:/var/run/redis/redis.sock RAILS_ENV=production
 
     # By default, the gitlab-shell config is generated from your main GitLab config.
+=======
+    sudo -u git -H bundle exec rake gitlab:shell:install[v1.9.8] REDIS_URL=redis://localhost:6379 RAILS_ENV=production
+
+    # By default, the gitlab-shell config is generated from your main gitlab config.
+    #
+    # Note: When using GitLab with HTTPS please change the following:
+    # - Provide paths to the certificates under `ca_file` and `ca_path` options.
+    # - The `gitlab_url` option must point to the https endpoint of GitLab.
+    # - In case you are using self signed certificate set `self_signed_cert` to `true`.
+    # See #using-https for all necessary details.
+    #
+>>>>>>> upstream/7-2-stable
     # You can review (and modify) the gitlab-shell config as follows:
     sudo -u git -H editor /home/git/gitlab-shell/config.yml
 

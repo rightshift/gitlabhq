@@ -1,3 +1,22 @@
+v 7.2.1
+  - Delete orphaned labels during label migration (James Brooks)
+  - Security: prevent XSS with stricter MIME types for raw repo files
+
+v 7.2.0
+  - Explore page
+  - Add project stars (Ciro Santilli)
+  - Log Sidekiq arguments
+  - Better labels: colors, ability to rename and remove
+  - Improve the way merge request collects diffs
+  - Improve compare page for large diffs
+  - Expose the full commit message via API
+  - Fix 500 error on repository rename
+  - Fix bug when MR download patch return invalid diff
+  - Test gitlab-shell integration
+  - Repository import timeout increased from 2 to 4 minutes allowing larger repos to be imported
+  - API for labels (Robert Schilling)
+  - API: ability to set an import url when creating project for specific user
+
 v 7.1.1
   - Fix cpu usage issue in Firefox
   - Fix redirect loop when changing password by new user
