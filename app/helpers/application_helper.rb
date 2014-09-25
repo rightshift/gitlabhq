@@ -178,6 +178,8 @@ module ApplicationHelper
   def search_placeholder
     if @project && @project.persisted?
       "Search in this project"
+    elsif @snippet || @snippets || @show_snippets
+      'Search snippets'
     elsif @group && @group.persisted?
       "Search in this group"
     else
@@ -221,7 +223,18 @@ module ApplicationHelper
   end
 
   def render_markup(file_name, file_content)
-    GitHub::Markup.render(file_name, file_content).html_safe
+    GitHub::Markup.render(file_name, file_content).
+      force_encoding(file_content.encoding).html_safe
+  rescue RuntimeError
+    simple_format(file_content)
+  end
+
+  def markup?(filename)
+    Gitlab::MarkdownHelper.markup?(filename)
+  end
+
+  def gitlab_markdown?(filename)
+    Gitlab::MarkdownHelper.gitlab_markdown?(filename)
   end
 
   def spinner(text = nil, visible = false)

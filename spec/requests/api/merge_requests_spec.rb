@@ -2,8 +2,6 @@ require "spec_helper"
 
 describe API::API, api: true  do
   include ApiHelpers
-  before(:each) { ActiveRecord::Base.observers.enable(:user_observer) }
-  after(:each) { ActiveRecord::Base.observers.disable(:user_observer) }
   let(:user) { create(:user) }
   let!(:project) {create(:project, creator_id: user.id, namespace: user.namespace) }
   let!(:merge_request) { create(:merge_request, :simple, author: user, assignee: user, source_project: project, target_project: project, title: "Test") }
@@ -59,6 +57,46 @@ describe API::API, api: true  do
         json_response.length.should == 1
         json_response.first['title'].should == merge_request_merged.title
       end
+
+      context "with ordering" do
+        before do
+          @mr_later = mr_with_later_created_and_updated_at_time
+          @mr_earlier = mr_with_earlier_created_and_updated_at_time
+        end
+
+        it "should return an array of merge_requests in ascending order" do
+          get api("/projects/#{project.id}/merge_requests?sort=asc", user)
+          response.status.should == 200
+          json_response.should be_an Array
+          json_response.length.should == 3
+          json_response.first['id'].should == @mr_earlier.id
+          json_response.last['id'].should == @mr_later.id
+        end
+        it "should return an array of merge_requests in descending order" do
+          get api("/projects/#{project.id}/merge_requests?sort=desc", user)
+          response.status.should == 200
+          json_response.should be_an Array
+          json_response.length.should == 3
+          json_response.first['id'].should == @mr_later.id
+          json_response.last['id'].should == @mr_earlier.id
+        end
+        it "should return an array of merge_requests ordered by updated_at" do
+          get api("/projects/#{project.id}/merge_requests?order_by=updated_at", user)
+          response.status.should == 200
+          json_response.should be_an Array
+          json_response.length.should == 3
+          json_response.first['id'].should == @mr_earlier.id
+          json_response.last['id'].should == @mr_later.id
+        end
+        it "should return an array of merge_requests ordered by created_at" do
+          get api("/projects/#{project.id}/merge_requests?sort=created_at", user)
+          response.status.should == 200
+          json_response.should be_an Array
+          json_response.length.should == 3
+          json_response.first['id'].should == @mr_earlier.id
+          json_response.last['id'].should == @mr_later.id
+        end
+      end
     end
   end
 
@@ -80,9 +118,14 @@ describe API::API, api: true  do
     context 'between branches projects' do
       it "should return merge_request" do
         post api("/projects/#{project.id}/merge_requests", user),
-        title: 'Test merge_request', source_branch: "stable", target_branch: "master", author: user
+             title: 'Test merge_request',
+             source_branch: 'stable',
+             target_branch: 'master',
+             author: user,
+             labels: 'label, label2'
         response.status.should == 201
         json_response['title'].should == 'Test merge_request'
+        json_response['labels'].should == ['label', 'label2']
       end
 
       it "should return 422 when source_branch equals target_branch" do
@@ -107,6 +150,18 @@ describe API::API, api: true  do
         post api("/projects/#{project.id}/merge_requests", user),
         target_branch: 'master', source_branch: 'stable'
         response.status.should == 400
+      end
+
+      it 'should return 400 on invalid label names' do
+        post api("/projects/#{project.id}/merge_requests", user),
+             title: 'Test merge_request',
+             source_branch: 'stable',
+             target_branch: 'master',
+             author: user,
+             labels: 'label, ?'
+        response.status.should == 400
+        json_response['message']['labels']['?']['title'].should ==
+          ['is invalid']
       end
     end
 
@@ -237,6 +292,15 @@ describe API::API, api: true  do
       response.status.should == 200
       json_response['target_branch'].should == 'wiki'
     end
+
+    it 'should return 400 on invalid label names' do
+      put api("/projects/#{project.id}/merge_request/#{merge_request.id}",
+              user),
+          title: 'new issue',
+          labels: 'label, ?'
+      response.status.should == 400
+      json_response['message']['labels']['?']['title'].should == ['is invalid']
+    end
   end
 
   describe "POST /projects/:id/merge_request/:merge_request_id/comments" do
@@ -271,5 +335,21 @@ describe API::API, api: true  do
       get api("/projects/#{project.id}/merge_request/999/comments", user)
       response.status.should == 404
     end
+  end
+
+  def mr_with_later_created_and_updated_at_time
+    merge_request
+    merge_request.created_at += 1.hour
+    merge_request.updated_at += 30.minutes
+    merge_request.save
+    merge_request
+  end
+
+  def mr_with_earlier_created_and_updated_at_time
+    merge_request_closed
+    merge_request_closed.created_at -= 1.hour
+    merge_request_closed.updated_at -= 30.minutes
+    merge_request_closed.save
+    merge_request_closed
   end
 end

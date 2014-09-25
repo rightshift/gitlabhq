@@ -2,12 +2,15 @@ require 'spec_helper'
 
 describe API::API, api: true  do
   include ApiHelpers
-  before(:each) { ActiveRecord::Base.observers.enable(:user_observer) }
-  after(:each) { ActiveRecord::Base.observers.disable(:user_observer) }
-
   let(:user) { create(:user) }
   let!(:project) { create(:project, namespace: user.namespace ) }
+  let!(:closed_issue) { create(:closed_issue, author: user, assignee: user, project: project, state: :closed) }
   let!(:issue) { create(:issue, author: user, assignee: user, project: project) }
+  let!(:label) do
+    create(:label, title: 'label', color: '#FFAABB', project: project)
+  end
+  let!(:label_link) { create(:label_link, label: label, target: issue) }
+
   before { project.team << [user, :reporter] }
 
   describe "GET /issues" do
@@ -31,6 +34,70 @@ describe API::API, api: true  do
         response.headers['Link'].should ==
           '<http://www.example.com/api/v3/issues?page=1&per_page=3>; rel="first", <http://www.example.com/api/v3/issues?page=1&per_page=3>; rel="last"'
       end
+
+      it 'should return an array of closed issues' do
+        get api('/issues?state=closed', user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 1
+        json_response.first['id'].should == closed_issue.id
+      end
+
+      it 'should return an array of opened issues' do
+        get api('/issues?state=opened', user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 1
+        json_response.first['id'].should == issue.id
+      end
+
+      it 'should return an array of all issues' do
+        get api('/issues?state=all', user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 2
+        json_response.first['id'].should == issue.id
+        json_response.second['id'].should == closed_issue.id
+      end
+
+      it 'should return an array of labeled issues' do
+        get api("/issues?labels=#{label.title}", user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 1
+        json_response.first['labels'].should == [label.title]
+      end
+
+      it 'should return an array of labeled issues when at least one label matches' do
+        get api("/issues?labels=#{label.title},foo,bar", user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 1
+        json_response.first['labels'].should == [label.title]
+      end
+
+      it 'should return an empty array if no issue matches labels' do
+        get api('/issues?labels=foo,bar', user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 0
+      end
+
+      it 'should return an array of labeled issues matching given state' do
+        get api("/issues?labels=#{label.title}&state=opened", user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 1
+        json_response.first['labels'].should == [label.title]
+        json_response.first['state'].should == 'opened'
+      end
+
+      it 'should return an empty array if no issue matches labels and state filters' do
+        get api("/issues?labels=#{label.title}&state=closed", user)
+        response.status.should == 200
+        json_response.should be_an Array
+        json_response.length.should == 0
+      end
     end
   end
 
@@ -40,6 +107,29 @@ describe API::API, api: true  do
       response.status.should == 200
       json_response.should be_an Array
       json_response.first['title'].should == issue.title
+    end
+
+    it 'should return an array of labeled project issues' do
+      get api("/projects/#{project.id}/issues?labels=#{label.title}", user)
+      response.status.should == 200
+      json_response.should be_an Array
+      json_response.length.should == 1
+      json_response.first['labels'].should == [label.title]
+    end
+
+    it 'should return an array of labeled project issues when at least one label matches' do
+      get api("/projects/#{project.id}/issues?labels=#{label.title},foo,bar", user)
+      response.status.should == 200
+      json_response.should be_an Array
+      json_response.length.should == 1
+      json_response.first['labels'].should == [label.title]
+    end
+
+    it 'should return an empty array if no project issue matches labels' do
+      get api("/projects/#{project.id}/issues?labels=foo,bar", user)
+      response.status.should == 200
+      json_response.should be_an Array
+      json_response.length.should == 0
     end
   end
 
@@ -71,6 +161,14 @@ describe API::API, api: true  do
       post api("/projects/#{project.id}/issues", user), labels: 'label, label2'
       response.status.should == 400
     end
+
+    it 'should return 400 on invalid label names' do
+      post api("/projects/#{project.id}/issues", user),
+           title: 'new issue',
+           labels: 'label, ?'
+      response.status.should == 400
+      json_response['message']['labels']['?']['title'].should == ['is invalid']
+    end
   end
 
   describe "PUT /projects/:id/issues/:issue_id to update only title" do
@@ -87,6 +185,58 @@ describe API::API, api: true  do
         title: 'updated title'
       response.status.should == 404
     end
+
+    it 'should return 400 on invalid label names' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          title: 'updated title',
+          labels: 'label, ?'
+      response.status.should == 400
+      json_response['message']['labels']['?']['title'].should == ['is invalid']
+    end
+  end
+
+  describe 'PUT /projects/:id/issues/:issue_id to update labels' do
+    let!(:label) { create(:label, title: 'dummy', project: project) }
+    let!(:label_link) { create(:label_link, label: label, target: issue) }
+
+    it 'should not update labels if not present' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          title: 'updated title'
+      response.status.should == 200
+      json_response['labels'].should == [label.title]
+    end
+
+    it 'should remove all labels' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          labels: ''
+      response.status.should == 200
+      json_response['labels'].should == []
+    end
+
+    it 'should update labels' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          labels: 'foo,bar'
+      response.status.should == 200
+      json_response['labels'].should include 'foo'
+      json_response['labels'].should include 'bar'
+    end
+
+    it 'should return 400 on invalid label names' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          labels: 'label, ?'
+      response.status.should == 400
+      json_response['message']['labels']['?']['title'].should == ['is invalid']
+    end
+
+    it 'should allow special label names' do
+      put api("/projects/#{project.id}/issues/#{issue.id}", user),
+          labels: 'label:foo, label-bar,label_bar,label/bar'
+      response.status.should == 200
+      json_response['labels'].should include 'label:foo'
+      json_response['labels'].should include 'label-bar'
+      json_response['labels'].should include 'label_bar'
+      json_response['labels'].should include 'label/bar'
+    end
   end
 
   describe "PUT /projects/:id/issues/:issue_id to update state and label" do
@@ -95,7 +245,7 @@ describe API::API, api: true  do
         labels: 'label2', state_event: "close"
       response.status.should == 200
 
-      json_response['labels'].should == ['label2']
+      json_response['labels'].should include 'label2'
       json_response['state'].should eq "closed"
     end
   end

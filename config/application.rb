@@ -18,15 +18,6 @@ module Gitlab
     # :all can be used as a placeholder for all plugins not explicitly named.
     # config.plugins = [ :exception_notification, :ssl_requirement, :all ]
 
-    # Activate observers that should always be running.
-    config.active_record.observers = :project_activity_cache_observer,
-                                     :note_observer,
-                                     :project_observer,
-                                     :system_hook_observer,
-                                     :user_observer,
-                                     :users_group_observer,
-                                     :users_project_observer
-
     # Set Time.zone default to the specified zone and make Active Record auto-convert to this zone.
     # Run "rake -D time" for a list of tasks for finding time zone names. Default is UTC.
     # config.time_zone = 'Central Time (US & Canada)'
@@ -49,12 +40,6 @@ module Gitlab
     # This is necessary if your schema can't be completely dumped by the schema dumper,
     # like if you have constraints or database-specific column types
     # config.active_record.schema_format = :sql
-
-    # Enforce whitelist mode for mass assignment.
-    # This will create an empty whitelist of attributes available for mass-assignment for all models
-    # in your app. As such, your models will need to explicitly whitelist or blacklist accessible
-    # parameters by using an attr_accessible or attr_protected declaration.
-    config.active_record.whitelist_attributes = true
 
     # Enable the asset pipeline
     config.assets.enabled = true
@@ -88,5 +73,24 @@ module Gitlab
         resource '/api/*', headers: :any, methods: [:get, :post, :options, :put, :delete]
       end
     end
+
+    # Use Redis caching across all environments
+    redis_config_file = Rails.root.join('config', 'resque.yml')
+
+    redis_url_string = if File.exists?(redis_config_file)
+                         YAML.load_file(redis_config_file)[Rails.env]
+                       else
+                         "redis://localhost:6379"
+                       end
+
+    # Redis::Store does not handle Unix sockets well, so let's do it for them
+    redis_config_hash = Redis::Store::Factory.extract_host_options_from_uri(redis_url_string)
+    redis_uri = URI.parse(redis_url_string)
+    if redis_uri.scheme == 'unix'
+      redis_config_hash[:path] = redis_uri.path
+    end
+
+    redis_config_hash[:namespace] = 'cache:gitlab'
+    config.cache_store = :redis_store, redis_config_hash
   end
 end

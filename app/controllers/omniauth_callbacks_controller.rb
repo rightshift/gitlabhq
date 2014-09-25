@@ -21,14 +21,19 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     @user = Gitlab::LDAP::User.find_or_create(oauth)
     @user.remember_me = true if @user.persisted?
 
-    gitlab_ldap_access do |access|
-      if access.allowed?(@user)
-        sign_in_and_redirect(@user)
-      else
-        flash[:alert] = "Access denied for your LDAP account."
-        redirect_to new_user_session_path
-      end
+    # Do additional LDAP checks for the user filter and EE features
+    if Gitlab::LDAP::Access.allowed?(@user)
+      sign_in_and_redirect(@user)
+    else
+      flash[:alert] = "Access denied for your LDAP account."
+      redirect_to new_user_session_path
     end
+  end
+
+  def omniauth_error
+    @provider = params[:provider]
+    @error = params[:error]
+    render 'errors/omniauth_error', layout: "errors", status: 422
   end
 
   private
@@ -45,14 +50,19 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
       # Create user if does not exist
       # and allow_single_sign_on is true
-      if Gitlab.config.omniauth['allow_single_sign_on']
-        @user ||= Gitlab::OAuth::User.create(oauth)
+      if Gitlab.config.omniauth['allow_single_sign_on'] && !@user
+        @user, errors = Gitlab::OAuth::User.create(oauth)
       end
 
-      if @user
+      if @user && !errors
         sign_in_and_redirect(@user)
       else
-        flash[:notice] = "There's no such user!"
+        if errors
+          error_message = errors.map{ |attribute, message| "#{attribute} #{message}" }.join(", ")
+          redirect_to omniauth_error_path(oauth['provider'], error: error_message) and return
+        else
+          flash[:notice] = "There's no such user!"
+        end
         redirect_to new_user_session_path
       end
     end

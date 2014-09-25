@@ -5,6 +5,7 @@ describe GitlabMarkdownHelper do
   include IssuesHelper
 
   let!(:project) { create(:project) }
+  let(:empty_project) { create(:empty_project) }
 
   let(:user)          { create(:user, username: 'gfm') }
   let(:commit)        { project.repository.commit }
@@ -16,6 +17,7 @@ describe GitlabMarkdownHelper do
   before do
     # Helper expects a @project instance variable
     @project = project
+    @ref = 'markdown'
     @repository = project.repository
   end
 
@@ -471,13 +473,13 @@ describe GitlabMarkdownHelper do
 
     it "should handle relative urls for a file in master" do
       actual = "[GitLab API doc](doc/api/README.md)\n"
-      expected = "<p><a href=\"/#{project.path_with_namespace}/blob/master/doc/api/README.md\">GitLab API doc</a></p>\n"
+      expected = "<p><a href=\"/#{project.path_with_namespace}/blob/#{@ref}/doc/api/README.md\">GitLab API doc</a></p>\n"
       markdown(actual).should match(expected)
     end
 
     it "should handle relative urls for a directory in master" do
       actual = "[GitLab API doc](doc/api)\n"
-      expected = "<p><a href=\"/#{project.path_with_namespace}/tree/master/doc/api\">GitLab API doc</a></p>\n"
+      expected = "<p><a href=\"/#{project.path_with_namespace}/tree/#{@ref}/doc/api\">GitLab API doc</a></p>\n"
       markdown(actual).should match(expected)
     end
 
@@ -489,19 +491,32 @@ describe GitlabMarkdownHelper do
 
     it "should handle relative urls in reference links for a file in master" do
       actual = "[GitLab API doc][GitLab readme]\n [GitLab readme]: doc/api/README.md\n"
-      expected = "<p><a href=\"/#{project.path_with_namespace}/blob/master/doc/api/README.md\">GitLab API doc</a></p>\n"
+      expected = "<p><a href=\"/#{project.path_with_namespace}/blob/#{@ref}/doc/api/README.md\">GitLab API doc</a></p>\n"
       markdown(actual).should match(expected)
     end
 
     it "should handle relative urls in reference links for a directory in master" do
       actual = "[GitLab API doc directory][GitLab readmes]\n [GitLab readmes]: doc/api/\n"
-      expected = "<p><a href=\"/#{project.path_with_namespace}/tree/master/doc/api\">GitLab API doc directory</a></p>\n"
+      expected = "<p><a href=\"/#{project.path_with_namespace}/tree/#{@ref}/doc/api\">GitLab API doc directory</a></p>\n"
       markdown(actual).should match(expected)
     end
 
      it "should not handle malformed relative urls in reference links for a file in master" do
       actual = "[GitLab readme]: doc/api/README.md\n"
       expected = ""
+      markdown(actual).should match(expected)
+    end
+  end
+
+  describe "markdwon for empty repository" do
+    before do
+      @project = empty_project
+      @repository = empty_project.repository
+    end
+
+    it "should not touch relative urls" do
+      actual = "[GitLab API doc][GitLab readme]\n [GitLab readme]: doc/api/README.md\n"
+      expected = "<p><a href=\"doc/api/README.md\">GitLab API doc</a></p>\n"
       markdown(actual).should match(expected)
     end
   end

@@ -44,6 +44,8 @@
               %li
                 %span.light Secondary email:
                 %strong= email.email
+                = link_to remove_email_admin_user_path(@user, email), data: { confirm: "Are you sure you want to remove #{email.email}?" }, method: :delete, class: "btn-tiny btn btn-remove pull-right", title: 'Remove secondary email', id: "remove_email_#{email.id}" do
+                  %i.icon-remove
 
             %li
               %span.light Can create groups:
@@ -67,6 +69,14 @@
                 %span.light Confirmed:
                 %strong.cred
                   No
+
+            %li
+              %span.light Current sign-in at:
+              %strong
+                - if @user.current_sign_in_at
+                  = @user.current_sign_in_at.stamp("Nov 12, 2031")
+                - else
+                  never
 
             %li
               %span.light Last sign-in at:

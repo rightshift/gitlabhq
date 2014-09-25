@@ -5,6 +5,10 @@
 This command gathers information about your GitLab installation and the System it runs on. These may be useful when asking for help or reporting issues.
 
 ```
+# omnibus-gitlab
+sudo gitlab-rake gitlab:env:info
+
+# installation from source or cookbook
 bundle exec rake gitlab:env:info RAILS_ENV=production
 ```
 
@@ -52,8 +56,14 @@ It will check that each component was setup according to the installation guide 
 You may also have a look at our [Trouble Shooting Guide](https://github.com/gitlabhq/gitlab-public-wiki/wiki/Trouble-Shooting-Guide).
 
 ```
+# omnibus-gitlab
+sudo gitlab-rake gitlab:check
+
+# installation from source or cookbook
 bundle exec rake gitlab:check RAILS_ENV=production
 ```
+
+NOTE: Use SANITIZE=true for gitlab:check if you want to omit project names from the output.
 
 Example output:
 
@@ -101,12 +111,14 @@ Redis version >= 2.0.0? ... yes
 Checking GitLab ... Finished
 ```
 
-## (Re-)Create satellite repos
+## (Re-)Create satellite repositories
 
-This will create satellite repos for all your projects.
+This will create satellite repositories for all your projects.
 
-If necessary, remove the `tmp/repo_satellites` directory and rerun the command below.
+If necessary, remove the `repo_satellites` directory and rerun the commands below.
 
 ```
-bundle exec rake gitlab:satellites:create RAILS_ENV=production
+sudo -u git -H mkdir -p /home/git/gitlab-satellites
+sudo -u git -H bundle exec rake gitlab:satellites:create RAILS_ENV=production
+sudo chmod u+rwx,g=rx,o-rwx /home/git/gitlab-satellites
 ```
